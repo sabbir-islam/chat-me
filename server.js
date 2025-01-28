@@ -4,42 +4,47 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-
-// Serve static files
-app.use(express.static('public'));
-
+const MAX_HISTORY = 100;
+const messageHistory = [];
 const users = new Map();
 
+app.use(express.static('public'));
+
 io.on('connection', (socket) => {
-    // Handle new user
     socket.on('join', (username) => {
         users.set(socket.id, username);
+        // Send history to new user
+        socket.emit('messageHistory', messageHistory);
+        // Update others
         io.emit('onlineCount', users.size);
         socket.broadcast.emit('message', {
             username: 'System',
-            message: `${username} has joined the chat`,
+            message: `${username} joined`,
             time: Date.now()
         });
     });
 
-    // Handle messages
     socket.on('message', (message) => {
-        const username = users.get(socket.id);
-        io.emit('message', {
+        if(typeof message !== 'string' || message.trim() === '') return;
+        const username = users.get(socket.id) || 'Anonymous';
+        const msgData = {
             username,
-            message,
+            message: message.trim(),
             time: Date.now()
-        });
+        };
+        messageHistory.push(msgData);
+        // Trim history
+        if(messageHistory.length > MAX_HISTORY) messageHistory.shift();
+        io.emit('message', msgData);
     });
 
-    // Handle disconnection
     socket.on('disconnect', () => {
-        const username = users.get(socket.id);
+        const username = users.get(socket.id) || 'Anonymous';
         users.delete(socket.id);
         io.emit('onlineCount', users.size);
         socket.broadcast.emit('message', {
             username: 'System',
-            message: `${username} has left the chat`,
+            message: `${username} left`,
             time: Date.now()
         });
     });

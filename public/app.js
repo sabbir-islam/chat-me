@@ -2,14 +2,32 @@ const socket = io();
 const messageInput = document.getElementById('messageInput');
 const messagesDiv = document.getElementById('messages');
 
-// Prompt for username
-const username = prompt('Enter your username:') || 'Anonymous';
+// Get validated username
+let username;
+do {
+    username = prompt('Enter your username (3-15 characters):') || 'Anonymous';
+} while (username.length < 3 || username.length > 15);
 
-// Join chat
 socket.emit('join', username);
 
-// Receive messages
+// Handle message history FIRST
+socket.on('messageHistory', (history) => {
+    history.forEach(data => {
+        addMessageToDOM(data);
+    });
+});
+
+// Then handle new messages
 socket.on('message', (data) => {
+    addMessageToDOM(data);
+});
+
+// Online count update
+socket.on('onlineCount', (count) => {
+    document.querySelector('.online-count').textContent = `Online: ${count}`;
+});
+
+function addMessageToDOM(data) {
     const messageElement = document.createElement('div');
     messageElement.className = 'message';
     messageElement.innerHTML = `
@@ -17,26 +35,21 @@ socket.on('message', (data) => {
         <div class="time">${new Date(data.time).toLocaleTimeString()}</div>
     `;
     messagesDiv.appendChild(messageElement);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-});
+    messagesDiv.scrollTo({
+        top: messagesDiv.scrollHeight,
+        behavior: 'smooth'
+    });
+}
 
-// Update online count
-socket.on('onlineCount', (count) => {
-    document.querySelector('.online-count').textContent = `Online: ${count}`;
-});
-
-// Send message
 function sendMessage() {
     const message = messageInput.value.trim();
     if (message) {
         socket.emit('message', message);
         messageInput.value = '';
+        messageInput.focus();
     }
 }
 
-// Send message on Enter key
 messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        sendMessage();
-    }
+    if (e.key === 'Enter') sendMessage();
 });
